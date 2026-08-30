@@ -1,0 +1,20 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "NNE ONNX Runtime CUDA",
+	"Description": "CUDA-backed ONNX Runtime for Unreal Engine's synchronous NNE interface.",
+	"Category": "Machine Learning",
+	"CreatedBy": "overyonder",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "NNERuntimeORTCuda",
+			"Type": "Runtime",
+			"LoadingPhase": "PreDefault",
+			"PlatformAllowList": [ "Linux" ]
+		}
+	]
+}
