@@ -16,15 +16,27 @@ The script downloads pinned official ONNX Runtime and NVIDIA packages and verifi
 
 ## Unreal project integration
 
-Place or symlink this repository at `Plugins/NNERuntimeORTCuda`, enable the plugin, and select it before creating a MetaHuman Live Link source:
+Place or symlink this repository at `Plugins/NNERuntimeORTCuda` and enable the
+plugin. Add both backend selections to the project's
+`Config/DefaultEngine.ini` file:
 
 ```ini
+[ConsoleVariables]
 mh.RealtimeVideo.Backend=NNERuntimeORTCuda
+mh.FaceTracker.Backend=NNERuntimeORTCuda
 ```
 
-The separate offline contour tracker uses `mh.FaceTracker.Backend=NNERuntimeORTCuda`.
+`mh.RealtimeVideo.Backend` selects the runtime for MetaHuman Video Live Link.
+`mh.FaceTracker.Backend` selects it for the separate offline contour tracker.
+These settings do not take effect from `Config/DefaultGame.ini`. Restart the
+editor after changing them, then recreate any existing MetaHuman Live Link
+source because it retains the backend selected when the source was created.
 
-The first implementation uses caller-owned CPU buffers. ONNX Runtime transfers inputs and outputs while the network itself runs on CUDA.
+MetaHuman reports this plugin as `using CPU runtime (NNERuntimeORTCuda)` because
+it exposes Unreal's synchronous CPU-binding interface. The tensor buffers are
+owned by the caller on the CPU, but ONNX Runtime transfers them and executes the
+network through the CUDA execution provider. The backend name in parentheses is
+the useful confirmation that the plugin was selected.
 
 UE 5.8's bundled MetaHuman model assets list only Epic's CPU and DirectML runtimes as cook targets. In the editor this plugin reads their retained ONNX source bytes directly, so those read-only engine assets do not need to be duplicated or modified. A packaged game must retarget or duplicate the model assets so `NNERuntimeORTCuda` model data is included during cooking.
 
