@@ -29,3 +29,10 @@ The first implementation uses caller-owned CPU buffers. ONNX Runtime transfers i
 UE 5.8's bundled MetaHuman model assets list only Epic's CPU and DirectML runtimes as cook targets. In the editor this plugin reads their retained ONNX source bytes directly, so those read-only engine assets do not need to be duplicated or modified. A packaged game must retarget or duplicate the model assets so `NNERuntimeORTCuda` model data is included during cooking.
 
 The initial model-data format accepts self-contained ONNX files. Models imported with ONNX external-data weight files are rejected instead of silently dropping their weights.
+
+## Related plugin
+
+[Linux Video Capture Media](https://github.com/overyonder/unreal-linux-v4l2-media)
+provides the V4L2 Media Framework source that supplies Linux webcam frames to
+MetaHuman Video Live Link. Use that capture plugin for camera input and this NNE
+plugin to run the neural-network solver on a supported NVIDIA GPU.
