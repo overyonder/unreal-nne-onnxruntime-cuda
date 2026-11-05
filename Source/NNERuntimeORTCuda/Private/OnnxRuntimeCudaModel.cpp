@@ -2,6 +2,7 @@
 
 #include "Algo/Transform.h"
 #include "NNEModelData.h"
+#include "Serialization/MemoryReader.h"
 #include "OnnxRuntimeCudaEnvironment.h"
 #include "OnnxRuntimeCudaModelDataFormat.h"
 
@@ -99,8 +100,40 @@ namespace UE::NNERuntimeORTCuda::Private
 			});
 			SessionOptions.AppendExecutionProvider_CUDA_V2(*CudaProviderOptions);
 
-			const uint8* OnnxModelData = SerializedModelData.GetData() + SerializedOnnxModelHeaderSize;
-			const size_t OnnxModelDataSize = static_cast<size_t>(SerializedModelData.Num() - SerializedOnnxModelHeaderSize);
+			int64 OnnxSize = 0, DescriptorSize = 0, WeightsSize = 0;
+            const uint8* Sizes = SerializedModelData.GetData() + 2 * sizeof(uint32);
+            FMemory::Memcpy(&OnnxSize, Sizes, sizeof(int64));
+            FMemory::Memcpy(&DescriptorSize, Sizes + sizeof(int64), sizeof(int64));
+            FMemory::Memcpy(&WeightsSize, Sizes + 2 * sizeof(int64), sizeof(int64));
+            int64 Remaining = SerializedModelData.Num() - SerializedOnnxModelHeaderSize;
+            if (OnnxSize <= 0 || OnnxSize > Remaining) return false;
+            Remaining -= OnnxSize;
+            if (DescriptorSize < 0 || DescriptorSize > Remaining) return false;
+            Remaining -= DescriptorSize;
+            if (WeightsSize != Remaining || (DescriptorSize == 0) != (WeightsSize == 0)) return false;
+            const uint8* OnnxModelData = SerializedModelData.GetData() + SerializedOnnxModelHeaderSize;
+            const size_t OnnxModelDataSize = static_cast<size_t>(OnnxSize);
+            std::vector<std::basic_string<ORTCHAR_T>> Names;
+            std::vector<char*> Buffers;
+            std::vector<size_t> Lengths;
+            if (DescriptorSize > 0)
+            {
+                FMemoryReaderView Reader(FMemoryView(OnnxModelData + OnnxSize, DescriptorSize), true);
+                TMap<FString, int64> ExternalSizes;
+                Reader << ExternalSizes;
+                if (Reader.IsError()) return false;
+                int64 Offset = 0;
+                for (const auto& Entry : ExternalSizes)
+                {
+                    if (Entry.Value < 0 || Entry.Value > WeightsSize - Offset) return false;
+                    Names.emplace_back(TCHAR_TO_UTF8(*Entry.Key));
+                    Buffers.push_back(reinterpret_cast<char*>(const_cast<uint8*>(OnnxModelData + OnnxSize + DescriptorSize + Offset)));
+                    Lengths.push_back(static_cast<size_t>(Entry.Value));
+                    Offset += Entry.Value;
+                }
+                if (Offset != WeightsSize) return false;
+                SessionOptions.AddExternalInitializersFromFilesInMemory(Names, Buffers, Lengths);
+            }
 			Session = MakeUnique<Ort::Session>(Environment->GetEnvironment(), OnnxModelData, OnnxModelDataSize, SessionOptions);
 			return ReadInputAndOutputTensorDescriptions();
 		}

@@ -40,7 +40,7 @@ the useful confirmation that the plugin was selected.
 
 UE 5.8's bundled MetaHuman model assets list only Epic's CPU and DirectML runtimes as cook targets. In the editor this plugin reads their retained ONNX source bytes directly, so those read-only engine assets do not need to be duplicated or modified. A packaged game must retarget or duplicate the model assets so `NNERuntimeORTCuda` model data is included during cooking.
 
-The initial model-data format accepts self-contained ONNX files. Models imported with ONNX external-data weight files are rejected instead of silently dropping their weights.
+Model data holds the ONNX file and, for a model imported with ONNX external-data weight files, those files' contents beside it, so their weights load with the model. Model data from 0.1.0 has no room for them and is rebuilt on import.
 
 ## Related plugin
 

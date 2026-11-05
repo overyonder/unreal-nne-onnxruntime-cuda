@@ -1,6 +1,7 @@
 #include "NNERuntimeORTCuda.h"
 
 #include "NNEModelData.h"
+#include "Serialization/MemoryReader.h"
 #include "OnnxRuntimeCudaEnvironment.h"
 #include "OnnxRuntimeCudaModel.h"
 #include "OnnxRuntimeCudaModelDataFormat.h"
@@ -15,21 +16,42 @@ namespace UE::NNERuntimeORTCuda::Private
 	const FString OnnxExternalDataDescriptorKey(TEXT("OnnxExternalDataDescriptor"));
 	const FString OnnxExternalDataBytesKey(TEXT("OnnxExternalDataBytes"));
 
-	bool DoesModelUseExternalOnnxData(const UNNEModelData& ModelData)
-	{
-		return !ModelData.GetAdditionalFileData(OnnxExternalDataDescriptorKey).IsEmpty()
-			|| !ModelData.GetAdditionalFileData(OnnxExternalDataBytesKey).IsEmpty();
-	}
+	TSharedPtr<UE::NNE::FSharedModelData> SerializeOnnxModelForCudaRuntime(
+        TConstArrayView64<uint8> FileData,
+        TConstArrayView64<uint8> Descriptor = {},
+        TConstArrayView64<uint8> Weights = {})
+    {
+        if (FileData.IsEmpty() || Descriptor.IsEmpty() != Weights.IsEmpty()) return nullptr;
+        if (!Descriptor.IsEmpty())
+        {
+            FMemoryReaderView Reader(MakeMemoryView(Descriptor), true);
+            TMap<FString, int64> Sizes;
+            Reader << Sizes;
+            if (Reader.IsError() || Sizes.IsEmpty()) return nullptr;
+            int64 Total = 0;
+            for (const auto& Entry : Sizes)
+            {
+                if (Entry.Value < 0 || Entry.Value > Weights.Num() - Total) return nullptr;
+                Total += Entry.Value;
+            }
+            if (Total != Weights.Num()) return nullptr;
+        }
+        const int64 OnnxSize = FileData.Num(), DescriptorSize = Descriptor.Num(), WeightsSize = Weights.Num();
+        TArray64<uint8> Bytes;
+        Bytes.SetNumUninitialized(SerializedOnnxModelHeaderSize + OnnxSize + DescriptorSize + WeightsSize);
+        uint8* Cursor = Bytes.GetData();
+        FMemory::Memcpy(Cursor, &SerializedOnnxModelMagic, sizeof(uint32)); Cursor += sizeof(uint32);
+        FMemory::Memcpy(Cursor, &SerializedOnnxModelVersion, sizeof(uint32)); Cursor += sizeof(uint32);
+        FMemory::Memcpy(Cursor, &OnnxSize, sizeof(int64)); Cursor += sizeof(int64);
+        FMemory::Memcpy(Cursor, &DescriptorSize, sizeof(int64)); Cursor += sizeof(int64);
+        FMemory::Memcpy(Cursor, &WeightsSize, sizeof(int64)); Cursor += sizeof(int64);
+        FMemory::Memcpy(Cursor, FileData.GetData(), OnnxSize); Cursor += OnnxSize;
+        if (DescriptorSize) FMemory::Memcpy(Cursor, Descriptor.GetData(), DescriptorSize);
+        Cursor += DescriptorSize;
+        if (WeightsSize) FMemory::Memcpy(Cursor, Weights.GetData(), WeightsSize);
+        return MakeShared<UE::NNE::FSharedModelData>(MakeSharedBufferFromArray(MoveTemp(Bytes)), 0);
+    }
 
-	TSharedPtr<UE::NNE::FSharedModelData> SerializeOnnxModelForCudaRuntime(TConstArrayView64<uint8> FileData)
-	{
-		TArray64<uint8> SerializedModelData;
-		SerializedModelData.SetNumUninitialized(SerializedOnnxModelHeaderSize + FileData.Num());
-		FMemory::Memcpy(SerializedModelData.GetData(), &SerializedOnnxModelMagic, sizeof(SerializedOnnxModelMagic));
-		FMemory::Memcpy(SerializedModelData.GetData() + sizeof(SerializedOnnxModelMagic), &SerializedOnnxModelVersion, sizeof(SerializedOnnxModelVersion));
-		FMemory::Memcpy(SerializedModelData.GetData() + SerializedOnnxModelHeaderSize, FileData.GetData(), FileData.Num());
-		return MakeShared<UE::NNE::FSharedModelData>(MakeSharedBufferFromArray(MoveTemp(SerializedModelData)), 0);
-	}
 }
 
 void UNNERuntimeORTCuda::Initialize(TSharedRef<UE::NNERuntimeORTCuda::Private::FOnnxRuntimeCudaEnvironment> InEnvironment)
@@ -49,7 +71,7 @@ UNNERuntimeORTCuda::ECanCreateModelDataStatus UNNERuntimeORTCuda::CanCreateModel
 	const FGuid& FileId,
 	const ITargetPlatform* TargetPlatform) const
 {
-	return FileType.Equals(TEXT("onnx"), ESearchCase::IgnoreCase) && !FileData.IsEmpty() && AdditionalFileData.IsEmpty()
+	return FileType.Equals(TEXT("onnx"), ESearchCase::IgnoreCase) && !FileData.IsEmpty()
 		? ECanCreateModelDataStatus::Ok
 		: ECanCreateModelDataStatus::FailFileIdNotSupported;
 }
@@ -69,7 +91,11 @@ TSharedPtr<UE::NNE::FSharedModelData> UNNERuntimeORTCuda::CreateModelData(
 		return nullptr;
 	}
 
-	return SerializeOnnxModelForCudaRuntime(FileData);
+	const auto* Descriptor = AdditionalFileData.Find(OnnxExternalDataDescriptorKey);
+    const auto* Weights = AdditionalFileData.Find(OnnxExternalDataBytesKey);
+    return SerializeOnnxModelForCudaRuntime(FileData,
+        Descriptor ? *Descriptor : TConstArrayView64<uint8>(),
+        Weights ? *Weights : TConstArrayView64<uint8>());
 }
 
 FString UNNERuntimeORTCuda::GetModelDataIdentifier(
@@ -93,8 +119,7 @@ UNNERuntimeORTCuda::ECanCreateModelCPUStatus UNNERuntimeORTCuda::CanCreateModelC
 
 #if WITH_EDITOR
 	if (ModelData->GetFileType().Equals(TEXT("onnx"), ESearchCase::IgnoreCase)
-		&& !ModelData->GetFileData().IsEmpty()
-		&& !DoesModelUseExternalOnnxData(*ModelData))
+		&& !ModelData->GetFileData().IsEmpty())
 	{
 		return ECanCreateModelCPUStatus::Ok;
 	}
@@ -127,10 +152,14 @@ TSharedPtr<UE::NNE::IModelCPU> UNNERuntimeORTCuda::CreateModelCPU(TObjectPtr<UNN
 	TSharedPtr<UE::NNE::FSharedModelData> SharedModelData;
 #if WITH_EDITOR
 	if (ModelData->GetFileType().Equals(TEXT("onnx"), ESearchCase::IgnoreCase)
-		&& !ModelData->GetFileData().IsEmpty()
-		&& !DoesModelUseExternalOnnxData(*ModelData))
+		&& !ModelData->GetFileData().IsEmpty())
 	{
-		SharedModelData = SerializeOnnxModelForCudaRuntime(ModelData->GetFileData());
+		// GetAdditionalFileData incorrectly narrows large buffers to a 32-bit view in UE 5.8.1.
+        // GetModelData passes its complete additional-data map to CreateModelData as 64-bit views.
+        if (!ModelData->GetAdditionalFileData(OnnxExternalDataDescriptorKey).IsEmpty())
+            SharedModelData = ModelData->GetModelData(GetRuntimeName());
+        else
+            SharedModelData = SerializeOnnxModelForCudaRuntime(ModelData->GetFileData());
 	}
 #endif
 	if (!SharedModelData.IsValid())

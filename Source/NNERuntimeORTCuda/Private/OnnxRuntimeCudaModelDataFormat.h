@@ -3,6 +3,6 @@
 namespace UE::NNERuntimeORTCuda::Private
 {
 	inline constexpr uint32 SerializedOnnxModelMagic = 0x5544434f;
-	inline constexpr uint32 SerializedOnnxModelVersion = 1;
-	inline constexpr int64 SerializedOnnxModelHeaderSize = sizeof(SerializedOnnxModelMagic) + sizeof(SerializedOnnxModelVersion);
+	inline constexpr uint32 SerializedOnnxModelVersion = 2;
+	inline constexpr int64 SerializedOnnxModelHeaderSize = sizeof(SerializedOnnxModelMagic) + sizeof(SerializedOnnxModelVersion) + 3 * sizeof(int64);
 }
