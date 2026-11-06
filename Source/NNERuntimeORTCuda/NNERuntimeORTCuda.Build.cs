@@ -7,7 +7,11 @@ public class NNERuntimeORTCuda : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		bEnableExceptions = true;
+#if UE_6_0_OR_LATER
+		AutoRTFM.DefaultMode = AutoRTFMMode.Disabled;
+#else
 		bDisableAutoRTFMInstrumentation = true;
+#endif
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
