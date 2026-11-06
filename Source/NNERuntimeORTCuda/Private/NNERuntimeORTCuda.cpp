@@ -87,7 +87,7 @@ TSharedPtr<UE::NNE::FSharedModelData> UNNERuntimeORTCuda::CreateModelData(
 
 	if (CanCreateModelData(FileType, FileData, AdditionalFileData, FileId, TargetPlatform) != ECanCreateModelDataStatus::Ok)
 	{
-		UE_LOG(LogNNERuntimeORTCuda, Error, TEXT("Cannot create CUDA model data for %s."), *FileId.ToString(EGuidFormats::Digits));
+		UE_LOGF(LogNNERuntimeORTCuda, Error, "Cannot create CUDA model data for %ls.", *FileId.ToString(EGuidFormats::Digits));
 		return nullptr;
 	}
 

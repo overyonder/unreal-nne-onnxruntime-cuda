@@ -21,7 +21,7 @@ namespace
 		}
 		else
 		{
-			UE_LOG(LogNNERuntimeORTCudaModule, Error, TEXT("Could not load %s."), *SharedLibraryPath);
+			UE_LOGF(LogNNERuntimeORTCudaModule, Error, "Could not load %ls.", *SharedLibraryPath);
 		}
 		return SharedLibraryHandle;
 	}
@@ -33,7 +33,7 @@ void FNNERuntimeORTCudaModule::StartupModule()
 	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("NNERuntimeORTCuda"));
 	if (!Plugin.IsValid())
 	{
-		UE_LOG(LogNNERuntimeORTCudaModule, Error, TEXT("Could not find the NNERuntimeORTCuda plugin descriptor."));
+		UE_LOGF(LogNNERuntimeORTCudaModule, Error, "Could not find the NNERuntimeORTCuda plugin descriptor.");
 		return;
 	}
 
@@ -59,7 +59,7 @@ void FNNERuntimeORTCudaModule::StartupModule()
 		FPlatformProcess::GetDllExport(OnnxRuntimeSharedLibraryHandle, TEXT("OrtGetApiBase")));
 	if (OrtGetApiBase == nullptr)
 	{
-		UE_LOG(LogNNERuntimeORTCudaModule, Error, TEXT("The CUDA ONNX Runtime library does not export OrtGetApiBase."));
+		UE_LOGF(LogNNERuntimeORTCudaModule, Error, "The CUDA ONNX Runtime library does not export OrtGetApiBase.");
 		Environment.Reset();
 		return;
 	}
@@ -67,7 +67,7 @@ void FNNERuntimeORTCudaModule::StartupModule()
 	const OrtApi* OnnxRuntimeApi = OrtGetApiBase()->GetApi(ORT_API_VERSION);
 	if (OnnxRuntimeApi == nullptr)
 	{
-		UE_LOG(LogNNERuntimeORTCudaModule, Error, TEXT("The CUDA ONNX Runtime API version does not match the plugin headers."));
+		UE_LOGF(LogNNERuntimeORTCudaModule, Error, "The CUDA ONNX Runtime API version does not match the plugin headers.");
 		Environment.Reset();
 		return;
 	}
@@ -80,7 +80,7 @@ void FNNERuntimeORTCudaModule::StartupModule()
 		Runtime->Initialize(Environment.ToSharedRef());
 		if (UE::NNE::RegisterRuntime(TWeakInterfacePtr<INNERuntime>(Runtime.Get())) != UE::NNE::ERegisterRuntimeStatus::Ok)
 		{
-			UE_LOG(LogNNERuntimeORTCudaModule, Error, TEXT("NNE rejected registration of NNERuntimeORTCuda."));
+			UE_LOGF(LogNNERuntimeORTCudaModule, Error, "NNE rejected registration of NNERuntimeORTCuda.");
 			Runtime->RemoveFromRoot();
 			Runtime.Reset();
 			Environment.Reset();
@@ -88,7 +88,7 @@ void FNNERuntimeORTCudaModule::StartupModule()
 	}
 	catch (const Ort::Exception& Exception)
 	{
-		UE_LOG(LogNNERuntimeORTCudaModule, Error, TEXT("Could not initialize CUDA ONNX Runtime: %s"), UTF8_TO_TCHAR(Exception.what()));
+		UE_LOGF(LogNNERuntimeORTCudaModule, Error, "Could not initialize CUDA ONNX Runtime: %ls", UTF8_TO_TCHAR(Exception.what()));
 		Environment.Reset();
 	}
 }

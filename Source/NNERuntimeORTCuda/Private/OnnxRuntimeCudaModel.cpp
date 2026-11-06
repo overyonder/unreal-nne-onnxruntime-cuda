@@ -72,7 +72,7 @@ namespace UE::NNERuntimeORTCuda::Private
 	{
 		if (SerializedModelData.Num() <= SerializedOnnxModelHeaderSize)
 		{
-			UE_LOG(LogNNERuntimeORTCudaModel, Error, TEXT("The serialized ONNX model is empty or truncated."));
+			UE_LOGF(LogNNERuntimeORTCudaModel, Error, "The serialized ONNX model is empty or truncated.");
 			return false;
 		}
 
@@ -82,7 +82,7 @@ namespace UE::NNERuntimeORTCuda::Private
 		FMemory::Memcpy(&Version, SerializedModelData.GetData() + sizeof(Magic), sizeof(Version));
 		if (Magic != SerializedOnnxModelMagic || Version != SerializedOnnxModelVersion)
 		{
-			UE_LOG(LogNNERuntimeORTCudaModel, Error, TEXT("The serialized ONNX model has an unsupported header."));
+			UE_LOGF(LogNNERuntimeORTCudaModel, Error, "The serialized ONNX model has an unsupported header.");
 			return false;
 		}
 
@@ -139,7 +139,7 @@ namespace UE::NNERuntimeORTCuda::Private
 		}
 		catch (const Ort::Exception& Exception)
 		{
-			UE_LOG(LogNNERuntimeORTCudaModel, Error, TEXT("Could not create the CUDA ONNX Runtime session: %s"), UTF8_TO_TCHAR(Exception.what()));
+			UE_LOGF(LogNNERuntimeORTCudaModel, Error, "Could not create the CUDA ONNX Runtime session: %ls", UTF8_TO_TCHAR(Exception.what()));
 			return false;
 		}
 	}
@@ -172,7 +172,7 @@ namespace UE::NNERuntimeORTCuda::Private
 
 		if (InInputShapes.Num() != InputTensorDescriptions.Num())
 		{
-			UE_LOG(LogNNERuntimeORTCudaModel, Error, TEXT("Received %d input shapes for a model with %d inputs."), InInputShapes.Num(), InputTensorDescriptions.Num());
+			UE_LOGF(LogNNERuntimeORTCudaModel, Error, "Received %d input shapes for a model with %d inputs.", InInputShapes.Num(), InputTensorDescriptions.Num());
 			return ESetInputTensorShapesStatus::Fail;
 		}
 
@@ -180,7 +180,7 @@ namespace UE::NNERuntimeORTCuda::Private
 		{
 			if (!InInputShapes[TensorIndex].IsCompatibleWith(InputTensorDescriptions[TensorIndex].GetShape()))
 			{
-				UE_LOG(LogNNERuntimeORTCudaModel, Error, TEXT("Input shape %d is incompatible with tensor %s."), TensorIndex, *InputTensorDescriptions[TensorIndex].GetName());
+				UE_LOGF(LogNNERuntimeORTCudaModel, Error, "Input shape %d is incompatible with tensor %ls.", TensorIndex, *InputTensorDescriptions[TensorIndex].GetName());
 				return ESetInputTensorShapesStatus::Fail;
 			}
 		}
@@ -297,7 +297,7 @@ namespace UE::NNERuntimeORTCuda::Private
 		}
 		catch (const Ort::Exception& Exception)
 		{
-			UE_LOG(LogNNERuntimeORTCudaModel, Error, TEXT("CUDA ONNX Runtime inference failed: %s"), UTF8_TO_TCHAR(Exception.what()));
+			UE_LOGF(LogNNERuntimeORTCudaModel, Error, "CUDA ONNX Runtime inference failed: %ls", UTF8_TO_TCHAR(Exception.what()));
 			return ERunSyncStatus::Fail;
 		}
 	}
@@ -334,7 +334,7 @@ namespace UE::NNERuntimeORTCuda::Private
 			const TOptional<ENNETensorDataType> UnrealTensorDataType = TranslateOnnxTensorElementTypeToUnrealTensorDataType(OnnxTensorElementType);
 			if (!UnrealTensorDataType.IsSet())
 			{
-				UE_LOG(LogNNERuntimeORTCudaModel, Error, TEXT("Tensor %s uses unsupported ONNX element type %d."), UTF8_TO_TCHAR(TensorName.get()), static_cast<int32>(OnnxTensorElementType));
+				UE_LOGF(LogNNERuntimeORTCudaModel, Error, "Tensor %ls uses unsupported ONNX element type %d.", UTF8_TO_TCHAR(TensorName.get()), static_cast<int32>(OnnxTensorElementType));
 				return false;
 			}
 
